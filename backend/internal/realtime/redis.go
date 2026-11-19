@@ -82,20 +82,19 @@ func (m *RedisManager) HydratePollCounts(ctx context.Context, pollID string, opt
 	return err
 }
 
-// CheckAndSetVoter checks if a voter has already voted and records them atomically
+// CheckAndSetVoter checks if a voter has already voted and records them atomically using a Redis Set
 // Returns true if voter was added (has not voted yet), false if duplicate
 func (m *RedisManager) CheckAndSetVoter(ctx context.Context, pollID string, voterFingerprint string) (bool, error) {
-	// First check individual voter key (poll:{id}:voters:{fingerprint})
-	voterKey := PollVoterFingerprintKey(pollID, voterFingerprint)
-	set, err := m.Client.SetNX(ctx, voterKey, "1", 0).Result()
+	voterSetKey := PollVoterFingerprintKey(pollID, voterFingerprint)
+	added, err := m.Client.SAdd(ctx, voterSetKey, "voted").Result()
 	if err != nil {
 		return false, err
 	}
-	if !set {
+	if added == 0 {
 		return false, nil
 	}
 
-	// Also add to set of all voters for this poll
+	// Also track in master set for poll cleanup
 	m.Client.SAdd(ctx, PollVotersKey(pollID), voterFingerprint)
 	return true, nil
 }
