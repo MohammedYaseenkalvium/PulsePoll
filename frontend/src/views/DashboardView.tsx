@@ -23,7 +23,11 @@ import {
   TrendingUp,
 } from 'lucide-react';
 
-export const DashboardView: React.FC = () => {
+interface DashboardViewProps {
+  onNavigateToLive?: (pollId: string) => void;
+}
+
+export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigateToLive }) => {
   const { user, logout } = useAuth();
   const [polls, setPolls] = useState<Poll[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -156,6 +160,10 @@ export const DashboardView: React.FC = () => {
   };
 
   const handleOpenLiveMonitor = (e: React.MouseEvent<HTMLButtonElement>, poll: Poll) => {
+    if (onNavigateToLive) {
+      onNavigateToLive(poll.id);
+      return;
+    }
     const rect = e.currentTarget.getBoundingClientRect();
     const savedRect: OriginRect = {
       left: rect.left,

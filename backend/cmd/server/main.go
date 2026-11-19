@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -116,6 +117,28 @@ func main() {
 			creatorRoutes.PATCH("/:id/status", pollsHandler.UpdatePollStatus)
 			creatorRoutes.DELETE("/:id", pollsHandler.DeletePoll)
 		}
+	}
+
+	// 5. Production Static Frontend Serving & SPA Fallback (when dist exists)
+	distDir := "./frontend/dist"
+	if _, err := os.Stat(distDir); os.IsNotExist(err) {
+		distDir = "./dist"
+	}
+
+	if _, err := os.Stat(distDir); err == nil {
+		log.Printf("[PulsePoll] Serving static frontend from %s", distDir)
+		r.Static("/assets", distDir+"/assets")
+		if _, err := os.Stat(distDir + "/favicon.ico"); err == nil {
+			r.StaticFile("/favicon.ico", distDir+"/favicon.ico")
+		}
+
+		r.NoRoute(func(c *gin.Context) {
+			if !strings.HasPrefix(c.Request.URL.Path, "/api") {
+				c.File(distDir + "/index.html")
+				return
+			}
+			c.JSON(http.StatusNotFound, gin.H{"error": "Endpoint not found"})
+		})
 	}
 
 	srv := &http.Server{
