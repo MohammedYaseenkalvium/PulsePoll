@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { ThemeToggle } from '../motion/ThemeToggle';
-import { Activity, Mail, Lock, User, ArrowRight, Loader2, AlertCircle, CheckCircle2, Radio } from 'lucide-react';
+import { Activity, Mail, Lock, User, ArrowRight, Loader2, AlertCircle, CheckCircle2, Radio, AlertTriangle, Sparkles } from 'lucide-react';
 import { ApiError } from '../lib/api';
 
 interface AuthViewProps {
@@ -9,7 +9,7 @@ interface AuthViewProps {
 }
 
 export const AuthView: React.FC<AuthViewProps> = ({ onSuccess }) => {
-  const { login, register } = useAuth();
+  const { login, register, enterDemoMode } = useAuth();
   const [mode, setMode] = useState<'login' | 'register'>('login');
 
   const [email, setEmail] = useState('');
@@ -18,6 +18,37 @@ export const AuthView: React.FC<AuthViewProps> = ({ onSuccess }) => {
 
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const [dbStatus, setDbStatus] = useState<{
+    checked: boolean;
+    online: boolean;
+    details?: string;
+  }>({ checked: false, online: true });
+
+  useEffect(() => {
+    fetch('/api/health')
+      .then((res) => res.json())
+      .then((data) => {
+        const mongoOk = data?.database?.mongodb === 'connected';
+        const redisOk = data?.database?.redis === 'connected';
+        if (!mongoOk || !redisOk) {
+          setDbStatus({
+            checked: true,
+            online: false,
+            details: 'MongoDB and Redis are currently unreachable. To connect local databases, start Docker Desktop and run: docker compose up -d',
+          });
+        } else {
+          setDbStatus({ checked: true, online: true });
+        }
+      })
+      .catch(() => {
+        setDbStatus({
+          checked: true,
+          online: false,
+          details: 'Backend server is starting up or unreachable at http://localhost:8080.',
+        });
+      });
+  }, []);
 
   // Live simulation for the miniature preview card in the right panel
   const [simVotes, setSimVotes] = useState({
@@ -172,6 +203,39 @@ export const AuthView: React.FC<AuthViewProps> = ({ onSuccess }) => {
                 </button>
               </div>
             </div>
+
+            {/* Database Offline Notice & Instant Demo Option */}
+            {!dbStatus.online && dbStatus.checked && (
+              <div className="p-4 rounded-2xl bg-warning-50 dark:bg-warning-950/40 border border-warning-200 dark:border-warning-800 space-y-2.5 text-xs text-warning-800 dark:text-warning-300">
+                <div className="flex items-start gap-2.5">
+                  <AlertTriangle className="w-4 h-4 text-warning-600 shrink-0 mt-0.5" />
+                  <div className="space-y-1 flex-1">
+                    <span className="font-bold text-content">Database Containers Offline</span>
+                    <p className="text-[11px] text-content-secondary leading-relaxed">
+                      MongoDB (`:27017`) and Redis (`:6379`) are not detected. To use full persistence, start Docker Desktop and run:
+                    </p>
+                    <code className="inline-block mt-0.5 px-2 py-0.5 rounded bg-surface border border-border-subtle font-mono text-[11px] text-primary-600 dark:text-primary-400">
+                      docker compose up -d
+                    </code>
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-warning-200/60 dark:border-warning-800/60 flex items-center justify-between">
+                  <span className="text-[11px] text-content-secondary">Or explore immediately:</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      enterDemoMode();
+                      onSuccess?.();
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-primary-600 hover:bg-primary-700 text-white font-semibold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer active:scale-95"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>Launch Demo Dashboard</span>
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Error Notification Alert */}
             {errorMessage && (

@@ -9,6 +9,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, username: string, password: string) => Promise<void>;
   logout: () => void;
+  enterDemoMode: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -92,6 +93,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.removeItem('pulsepoll_user');
   }, []);
 
+  const enterDemoMode = useCallback(() => {
+    const demoUser: UserProfile = {
+      id: 'demo-user-id-001',
+      email: 'demo@pulsepoll.dev',
+      username: 'demo_creator',
+    };
+    setStoredToken('demo-jwt-token-local');
+    setToken('demo-jwt-token-local');
+    setUser(demoUser);
+    localStorage.setItem('pulsepoll_user', JSON.stringify(demoUser));
+  }, []);
+
   return (
     <AuthContext.Provider
       value={{
@@ -102,6 +115,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         login,
         register,
         logout,
+        enterDemoMode,
       }}
     >
       {children}
