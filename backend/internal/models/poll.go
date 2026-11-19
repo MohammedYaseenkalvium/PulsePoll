@@ -39,10 +39,10 @@ type CreateOptionInput struct {
 type CreatePollInput struct {
 	Question      string              `json:"question" binding:"required,min=3,max=300"`
 	Description   string              `json:"description" binding:"max=2000"`
-	Options       []CreateOptionInput `json:"options" binding:"required,min=2,max=20,dive"`
+	Options       []CreateOptionInput `json:"options" binding:"required,min=2,max=10,dive"`
 	AllowMultiple bool                `json:"allowMultiple"`
 }
 
-type UpdatePollInput struct {
-	Status *PollStatus `json:"status"`
+type UpdatePollStatusInput struct {
+	Status PollStatus `json:"status" binding:"required,oneof=open closed"`
 }

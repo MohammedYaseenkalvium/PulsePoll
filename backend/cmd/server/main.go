@@ -23,19 +23,18 @@ import (
 func main() {
 	cfg := config.LoadConfig()
 
-	log.Printf("[PulsePoll] Starting backend on port %s", cfg.Port)
+	log.Printf("[PulsePoll] Initializing backend service on port %s...", cfg.Port)
 
 	// 1. Connect to MongoDB
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+	mongoCtx, mongoCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer mongoCancel()
 
-	mongoClient, err := mongo.Connect(ctx, options.Client().ApplyURI(cfg.MongoURI))
+	mongoClient, err := mongo.Connect(mongoCtx, options.Client().ApplyURI(cfg.MongoURI))
 	if err != nil {
-		log.Printf("[PulsePoll] Warning: MongoDB initial connection failed: %v", err)
+		log.Printf("[PulsePoll] Warning: MongoDB initial connection error: %v", err)
 	} else {
-		// Ping MongoDB
-		if err := mongoClient.Ping(ctx, nil); err != nil {
-			log.Printf("[PulsePoll] Warning: MongoDB ping failed: %v", err)
+		if pingErr := mongoClient.Ping(mongoCtx, nil); pingErr != nil {
+			log.Printf("[PulsePoll] Warning: MongoDB ping failed: %v", pingErr)
 		} else {
 			log.Printf("[PulsePoll] Connected to MongoDB database: %s", cfg.MongoDBName)
 		}
@@ -47,23 +46,47 @@ func main() {
 	if err != nil {
 		log.Printf("[PulsePoll] Warning: Redis initialization error: %v", err)
 	} else {
-		log.Printf("[PulsePoll] Redis client initialized (Addr: %s)", cfg.RedisAddr)
+		log.Printf("[PulsePoll] Redis client connected (Addr: %s)", cfg.RedisAddr)
 	}
 
-	// 3. Initialize Handlers
+	// 3. Initialize Handlers & Streamers
 	authHandler := handlers.NewAuthHandler(db, cfg)
-	pollHandler := handlers.NewPollHandler(db, redisManager)
+	pollsHandler := handlers.NewPollsHandler(db, redisManager)
+	voteHandler := handlers.NewVoteHandler(db, redisManager)
+	sseStreamer := realtime.NewSSEStreamer(db, redisManager)
 
-	// 4. Gin Router Setup
+	// 4. Gin Engine Setup
 	r := gin.Default()
 	r.Use(middleware.CORSMiddleware(cfg.CORSAllowOrigin))
 
-	// Health Check
+	// Health Check with live MongoDB and Redis ping checks
 	r.GET("/api/health", func(c *gin.Context) {
+		hCtx, hCancel := context.WithTimeout(c.Request.Context(), 2*time.Second)
+		defer hCancel()
+
+		mongoStatus := "connected"
+		if mongoErr := mongoClient.Ping(hCtx, nil); mongoErr != nil {
+			mongoStatus = fmt.Sprintf("unreachable: %v", mongoErr)
+		}
+
+		redisStatus := "connected"
+		if redisErr := redisManager.Client.Ping(hCtx).Err(); redisErr != nil {
+			redisStatus = fmt.Sprintf("unreachable: %v", redisErr)
+		}
+
+		overall := "healthy"
+		if mongoStatus != "connected" || redisStatus != "connected" {
+			overall = "degraded"
+		}
+
 		c.JSON(http.StatusOK, gin.H{
-			"status":    "healthy",
+			"status":    overall,
 			"service":   "pulsepoll-backend",
 			"timestamp": time.Now().UTC().Format(time.RFC3339),
+			"database": gin.H{
+				"mongodb": mongoStatus,
+				"redis":   redisStatus,
+			},
 		})
 	})
 
@@ -75,20 +98,23 @@ func main() {
 		authRoutes.GET("/me", middleware.AuthMiddleware(cfg.JWTSecret), authHandler.Me)
 	}
 
-	// Poll Routes
-	pollRoutes := r.Group("/api/polls")
+	// Polls Routes
+	pollsRoutes := r.Group("/api/polls")
 	{
-		// Public or optionally authenticated
-		pollRoutes.GET("/:id", pollHandler.GetPoll)
-		pollRoutes.GET("/:id/stream", pollHandler.StreamPoll)
-		pollRoutes.POST("/:id/vote", middleware.OptionalAuthMiddleware(cfg.JWTSecret), pollHandler.CastVote)
+		// Public endpoints: view poll by slug or ID, cast vote, and SSE stream
+		pollsRoutes.GET("/s/:shareSlug", voteHandler.GetPollByShareSlug)
+		pollsRoutes.GET("/:id", voteHandler.GetPollByID)
+		pollsRoutes.GET("/:id/stream", sseStreamer.StreamPoll)
+		pollsRoutes.POST("/:id/vote", middleware.OptionalAuthMiddleware(cfg.JWTSecret), voteHandler.CastVote)
 
-		// Protected by JWT Auth Middleware
-		protectedPolls := pollRoutes.Group("")
-		protectedPolls.Use(middleware.AuthMiddleware(cfg.JWTSecret))
+		// Creator endpoints: protected by JWT Auth Middleware
+		creatorRoutes := pollsRoutes.Group("")
+		creatorRoutes.Use(middleware.AuthMiddleware(cfg.JWTSecret))
 		{
-			protectedPolls.POST("", pollHandler.CreatePoll)
-			protectedPolls.PATCH("/:id", pollHandler.UpdatePoll)
+			creatorRoutes.POST("", pollsHandler.CreatePoll)
+			creatorRoutes.GET("", pollsHandler.GetMyPolls)
+			creatorRoutes.PATCH("/:id/status", pollsHandler.UpdatePollStatus)
+			creatorRoutes.DELETE("/:id", pollsHandler.DeletePoll)
 		}
 	}
 
@@ -97,29 +123,28 @@ func main() {
 		Handler: r,
 	}
 
-	// Graceful shutdown
+	// Graceful server startup
 	go func() {
+		log.Printf("[PulsePoll] Server listening at http://localhost:%s", cfg.Port)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("[PulsePoll] Server failed: %v", err)
+			log.Fatalf("[PulsePoll] Server error: %v", err)
 		}
 	}()
-
-	log.Printf("[PulsePoll] Server listening on http://localhost:%s", cfg.Port)
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
-	log.Println("[PulsePoll] Shutting down server gracefully...")
+	log.Println("[PulsePoll] Gracefully shutting down...")
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer shutdownCancel()
 
 	if err := srv.Shutdown(shutdownCtx); err != nil {
-		log.Fatalf("[PulsePoll] Server forced to shutdown: %v", err)
+		log.Fatalf("[PulsePoll] Forced shutdown: %v", err)
 	}
 	if err := mongoClient.Disconnect(shutdownCtx); err != nil {
-		log.Printf("[PulsePoll] Error disconnecting Mongo: %v", err)
+		log.Printf("[PulsePoll] MongoDB disconnect error: %v", err)
 	}
 
-	log.Println("[PulsePoll] Server stopped cleanly")
+	log.Println("[PulsePoll] Server exited cleanly")
 }

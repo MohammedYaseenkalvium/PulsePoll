@@ -29,6 +29,7 @@ func NewAuthHandler(db *mongo.Database, cfg *config.Config) *AuthHandler {
 	}
 }
 
+// Register handles POST /api/auth/register
 func (h *AuthHandler) Register(c *gin.Context) {
 	var input models.RegisterInput
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -38,6 +39,11 @@ func (h *AuthHandler) Register(c *gin.Context) {
 
 	input.Email = strings.TrimSpace(strings.ToLower(input.Email))
 	input.Username = strings.TrimSpace(input.Username)
+
+	if len(input.Password) < 8 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Password must be at least 8 characters long"})
+		return
+	}
 
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
@@ -58,7 +64,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	// Hash password
+	// Hash password with bcrypt
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to encrypt credentials"})
@@ -77,13 +83,13 @@ func (h *AuthHandler) Register(c *gin.Context) {
 
 	_, err = h.userCol.InsertOne(ctx, newUser)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to persist user profile"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save user account"})
 		return
 	}
 
 	token, err := middleware.GenerateToken(newUser.ID.Hex(), newUser.Email, h.cfg.JWTSecret, h.cfg.JWTExpiry)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to issue authorization token"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate authorization token"})
 		return
 	}
 
@@ -97,6 +103,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	})
 }
 
+// Login handles POST /api/auth/login
 func (h *AuthHandler) Login(c *gin.Context) {
 	var input models.LoginInput
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -128,7 +135,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 	token, err := middleware.GenerateToken(user.ID.Hex(), user.Email, h.cfg.JWTSecret, h.cfg.JWTExpiry)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to issue authorization token"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate authorization token"})
 		return
 	}
 
@@ -142,6 +149,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	})
 }
 
+// Me handles GET /api/auth/me
 func (h *AuthHandler) Me(c *gin.Context) {
 	userIDStr, exists := c.Get("userID")
 	if !exists {

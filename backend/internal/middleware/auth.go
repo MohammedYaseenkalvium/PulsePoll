@@ -16,6 +16,7 @@ type JWTClaims struct {
 	jwt.RegisteredClaims
 }
 
+// GenerateToken creates a signed JWT token
 func GenerateToken(userID string, email string, secret string, expiry time.Duration) (string, error) {
 	claims := JWTClaims{
 		UserID: userID,
@@ -31,6 +32,7 @@ func GenerateToken(userID string, email string, secret string, expiry time.Durat
 	return token.SignedString([]byte(secret))
 }
 
+// ValidateToken verifies a signed JWT token string
 func ValidateToken(tokenStr string, secret string) (*JWTClaims, error) {
 	token, err := jwt.ParseWithClaims(tokenStr, &JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
@@ -50,6 +52,7 @@ func ValidateToken(tokenStr string, secret string) (*JWTClaims, error) {
 	return nil, errors.New("invalid token")
 }
 
+// AuthMiddleware validates Authorization: Bearer <token> and attaches userID to context
 func AuthMiddleware(secret string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
@@ -61,14 +64,14 @@ func AuthMiddleware(secret string) gin.HandlerFunc {
 
 		parts := strings.Split(authHeader, " ")
 		if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header must be Bearer token"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header must be in format Bearer <token>"})
 			c.Abort()
 			return
 		}
 
 		claims, err := ValidateToken(parts[1], secret)
 		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired token"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired authorization token"})
 			c.Abort()
 			return
 		}
@@ -79,6 +82,7 @@ func AuthMiddleware(secret string) gin.HandlerFunc {
 	}
 }
 
+// OptionalAuthMiddleware parses the token if present without aborting if missing
 func OptionalAuthMiddleware(secret string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")

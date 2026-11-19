@@ -22,8 +22,10 @@ type CastVoteInput struct {
 }
 
 type VoteStreamMessage struct {
+	Type         string           `json:"type"` // "initial", "vote_update", "status_change"
 	PollID       string           `json:"pollId"`
-	OptionCounts map[string]int64 `json:"optionCounts"`
-	TotalVotes   int64            `json:"totalVotes"`
+	Status       PollStatus       `json:"status,omitempty"`
+	OptionCounts map[string]int64 `json:"optionCounts,omitempty"`
+	TotalVotes   int64            `json:"totalVotes,omitempty"`
 	Timestamp    int64            `json:"timestamp"`
 }
