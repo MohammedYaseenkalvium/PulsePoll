@@ -25,11 +25,11 @@ func main() {
 
 	log.Printf("[PulsePoll] Initializing backend service on port %s...", cfg.Port)
 
-	// 1. Connect to MongoDB
-	mongoCtx, mongoCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	// 1. Connect to MongoDB (fail-fast timeout of 2s so requests don't hang if Mongo is down)
+	mongoCtx, mongoCancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer mongoCancel()
 
-	mongoClient, err := mongo.Connect(mongoCtx, options.Client().ApplyURI(cfg.MongoURI))
+	mongoClient, err := mongo.Connect(mongoCtx, options.Client().ApplyURI(cfg.MongoURI).SetServerSelectionTimeout(2*time.Second))
 	if err != nil {
 		log.Printf("[PulsePoll] Warning: MongoDB initial connection error: %v", err)
 	} else {

@@ -73,6 +73,10 @@
   --text-muted: var(--neutral-400);
   --border-subtle: var(--neutral-200);
   --border-strong: var(--neutral-300);
+
+  /* Button Tokens */
+  --btn-primary-bg: var(--primary-600);
+  --btn-primary-hover: var(--primary-700);
 }
 
 /* Dark Mode Tokens */

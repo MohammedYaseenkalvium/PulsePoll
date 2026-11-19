@@ -56,7 +56,10 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		},
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error checking user existence"})
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error": "Database unavailable: MongoDB is not reachable on localhost:27017. Please ensure Docker Desktop is open and run 'docker compose up -d'.",
+			"details": err.Error(),
+		})
 		return
 	}
 	if count > 0 {
@@ -123,7 +126,10 @@ func (h *AuthHandler) Login(c *gin.Context) {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid email or password"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error retrieving user"})
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error": "Database unavailable: MongoDB is not reachable on localhost:27017. Please ensure Docker Desktop is open and run 'docker compose up -d'.",
+			"details": err.Error(),
+		})
 		return
 	}
 
