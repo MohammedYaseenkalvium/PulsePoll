@@ -7,6 +7,9 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path"
+	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -44,10 +47,9 @@ func main() {
 	// 2. Connect to Redis
 	redisManager, err := realtime.NewRedisManager(cfg)
 	if err != nil {
-		log.Printf("[PulsePoll] Warning: Redis initialization error: %v", err)
-	} else {
-		log.Printf("[PulsePoll] Redis client connected (Addr: %s)", cfg.RedisAddr)
+		log.Fatalf("[PulsePoll] Invalid Redis configuration: %v", err)
 	}
+	log.Printf("[PulsePoll] Redis client initialized")
 
 	// 3. Initialize Handlers & Streamers
 	authHandler := handlers.NewAuthHandler(db, cfg)
@@ -118,6 +120,40 @@ func main() {
 		}
 	}
 
+	// 5. Production Static Frontend Serving & SPA Fallback (when a built dist exists).
+	// Resolution order: STATIC_DIR env -> ./frontend/dist (Docker WORKDIR /app) ->
+	// ../frontend/dist (running from /backend locally) -> ./dist.
+	if distDir := resolveStaticDir(cfg.StaticDir); distDir != "" {
+		log.Printf("[PulsePoll] Serving static frontend from %s", distDir)
+		indexFile := filepath.Join(distDir, "index.html")
+
+		r.NoRoute(func(c *gin.Context) {
+			reqPath := c.Request.URL.Path
+			if strings.HasPrefix(reqPath, "/api") {
+				c.JSON(http.StatusNotFound, gin.H{"error": "Endpoint not found"})
+				return
+			}
+			if c.Request.Method != http.MethodGet && c.Request.Method != http.MethodHead {
+				c.Status(http.StatusNotFound)
+				return
+			}
+			// Serve real files (assets, favicon, etc.); path.Clean on a rooted path prevents traversal.
+			candidate := filepath.Join(distDir, filepath.FromSlash(path.Clean("/"+reqPath)))
+			if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
+				if strings.HasPrefix(reqPath, "/assets/") {
+					c.Header("Cache-Control", "public, max-age=31536000, immutable")
+				}
+				c.File(candidate)
+				return
+			}
+			// SPA fallback for client-side routes (/vote/:slug, /poll/:id/live, ...)
+			c.Header("Cache-Control", "no-cache")
+			c.File(indexFile)
+		})
+	} else {
+		log.Printf("[PulsePoll] No built frontend found; running API-only (use Vite dev server on :5173)")
+	}
+
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%s", cfg.Port),
 		Handler: r,
@@ -147,4 +183,21 @@ func main() {
 	}
 
 	log.Println("[PulsePoll] Server exited cleanly")
+}
+
+// resolveStaticDir returns the first directory containing a built index.html.
+func resolveStaticDir(override string) string {
+	candidates := []string{"./frontend/dist", "../frontend/dist", "./dist"}
+	if override != "" {
+		candidates = []string{override}
+	}
+	for _, dir := range candidates {
+		if info, err := os.Stat(filepath.Join(dir, "index.html")); err == nil && !info.IsDir() {
+			if abs, err := filepath.Abs(dir); err == nil {
+				return abs
+			}
+			return dir
+		}
+	}
+	return ""
 }

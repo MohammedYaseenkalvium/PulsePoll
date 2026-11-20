@@ -2,8 +2,11 @@ package realtime
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"log"
+	"net"
 	"strconv"
 	"time"
 
@@ -17,17 +20,56 @@ type RedisManager struct {
 	Client *redis.Client
 }
 
-func NewRedisManager(cfg *config.Config) (*RedisManager, error) {
-	rdb := redis.NewClient(&redis.Options{
+// buildRedisOptions resolves connection options from config.
+//   - REDIS_URL (e.g. rediss://default:pass@host:6379) takes precedence; the
+//     rediss:// scheme enables TLS automatically (Upstash, Redis Cloud, etc.).
+//   - Otherwise REDIS_ADDR / REDIS_USERNAME / REDIS_PASSWORD / REDIS_DB are used,
+//     with TLS enabled when REDIS_TLS=true.
+func buildRedisOptions(cfg *config.Config) (*redis.Options, error) {
+	if cfg.RedisURL != "" {
+		opts, err := redis.ParseURL(cfg.RedisURL)
+		if err != nil {
+			return nil, fmt.Errorf("invalid REDIS_URL: %w", err)
+		}
+		if cfg.RedisTLS && opts.TLSConfig == nil {
+			opts.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS12, ServerName: hostOnly(opts.Addr)}
+		}
+		return opts, nil
+	}
+
+	opts := &redis.Options{
 		Addr:     cfg.RedisAddr,
+		Username: cfg.RedisUsername,
 		Password: cfg.RedisPassword,
 		DB:       cfg.RedisDB,
-	})
+	}
+	if cfg.RedisTLS {
+		opts.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS12, ServerName: hostOnly(cfg.RedisAddr)}
+	}
+	return opts, nil
+}
+
+func hostOnly(addr string) string {
+	if host, _, err := net.SplitHostPort(addr); err == nil {
+		return host
+	}
+	return addr
+}
+
+func NewRedisManager(cfg *config.Config) (*RedisManager, error) {
+	opts, err := buildRedisOptions(cfg)
+	if err != nil {
+		return nil, err
+	}
+	rdb := redis.NewClient(opts)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	_ = rdb.Ping(ctx)
+	// Non-fatal: the client reconnects lazily, so a cold Redis at boot shouldn't crash the server.
+	if pingErr := rdb.Ping(ctx).Err(); pingErr != nil {
+		log.Printf("[PulsePoll] Warning: Redis ping failed (addr=%s, tls=%t): %v", opts.Addr, opts.TLSConfig != nil, pingErr)
+	}
 
 	return &RedisManager{Client: rdb}, nil
 }

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"log"
 	"os"
 	"strconv"
 	"time"
@@ -10,15 +11,25 @@ type Config struct {
 	Port            string
 	MongoURI        string
 	MongoDBName     string
+	RedisURL        string // Optional full URL (redis:// or rediss:// for TLS). Takes precedence over Addr/Password.
 	RedisAddr       string
+	RedisUsername   string
 	RedisPassword   string
 	RedisDB         int
+	RedisTLS        bool
 	JWTSecret       string
 	JWTExpiry       time.Duration
 	CORSAllowOrigin string
+	StaticDir       string // Optional override for the built frontend directory
 }
 
 func LoadConfig() *Config {
+	// Local dev convenience: ./.env when run from /backend, backend/.env when run from the repo root.
+	// Excluded from Docker images via .dockerignore, so containers rely purely on real env vars.
+	if loaded := loadDotEnv(".env", "backend/.env"); loaded != "" {
+		log.Printf("[PulsePoll] Loaded environment defaults from %s", loaded)
+	}
+
 	port := getEnv("PORT", "8080")
 	mongoURI := getEnv("MONGO_URI", "mongodb://localhost:27017")
 	mongoDBName := getEnv("MONGO_DB", "pulsepoll")
@@ -39,16 +50,25 @@ func LoadConfig() *Config {
 
 	corsAllowOrigin := getEnv("CORS_ALLOW_ORIGIN", "*")
 
+	redisTLS, err := strconv.ParseBool(getEnv("REDIS_TLS", "false"))
+	if err != nil {
+		redisTLS = false
+	}
+
 	return &Config{
 		Port:            port,
 		MongoURI:        mongoURI,
 		MongoDBName:     mongoDBName,
+		RedisURL:        getEnv("REDIS_URL", ""),
 		RedisAddr:       redisAddr,
+		RedisUsername:   getEnv("REDIS_USERNAME", ""),
 		RedisPassword:   redisPassword,
 		RedisDB:         redisDB,
+		RedisTLS:        redisTLS,
 		JWTSecret:       jwtSecret,
 		JWTExpiry:       time.Duration(jwtExpiryHours) * time.Hour,
 		CORSAllowOrigin: corsAllowOrigin,
+		StaticDir:       getEnv("STATIC_DIR", ""),
 	}
 }
 

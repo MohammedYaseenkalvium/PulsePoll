@@ -1,0 +1,16 @@
+# Keep the Docker build context small and free of secrets/host artifacts.
+.git
+.github
+.tools
+.vscode
+.idea
+**/node_modules
+frontend/dist
+frontend/.vite
+**/*.exe
+**/*.log
+**/.env
+**/.env.*
+!**/.env.example
+Dockerfile
+docker-compose.yml

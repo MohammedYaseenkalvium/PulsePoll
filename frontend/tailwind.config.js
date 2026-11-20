@@ -6,6 +6,7 @@ export default {
     extend: {
       colors: {
         primary: {
+          DEFAULT: 'var(--primary-500)',
           50: 'var(--primary-50)',
           100: 'var(--primary-100)',
           200: 'var(--primary-200)',
@@ -16,6 +17,7 @@ export default {
           700: 'var(--primary-700)',
           800: 'var(--primary-800)',
           900: 'var(--primary-900)',
+          950: 'var(--primary-950)',
         },
         neutral: {
           50: 'var(--neutral-50)',
@@ -41,6 +43,7 @@ export default {
           700: 'var(--success-700)',
           800: 'var(--success-800)',
           900: 'var(--success-900)',
+          950: 'var(--success-950)',
         },
         warning: {
           50: 'var(--warning-50)',
@@ -53,6 +56,7 @@ export default {
           700: 'var(--warning-700)',
           800: 'var(--warning-800)',
           900: 'var(--warning-900)',
+          950: 'var(--warning-950)',
         },
         error: {
           50: 'var(--error-50)',
@@ -65,11 +69,13 @@ export default {
           700: 'var(--error-700)',
           800: 'var(--error-800)',
           900: 'var(--error-900)',
+          950: 'var(--error-950)',
         },
         canvas: 'var(--bg-canvas)',
+        elevated: 'var(--bg-elevated)',
         surface: {
           DEFAULT: 'var(--bg-surface)',
-          elevated: 'var(--bg-surface-elevated)',
+          elevated: 'var(--bg-elevated)',
         },
         content: {
           DEFAULT: 'var(--text-primary)',
