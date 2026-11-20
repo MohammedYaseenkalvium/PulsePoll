@@ -1,6 +1,7 @@
 package config
 
 import (
+	"log"
 	"os"
 	"strconv"
 	"time"
@@ -23,6 +24,12 @@ type Config struct {
 }
 
 func LoadConfig() *Config {
+	// Local dev convenience: ./.env when run from /backend, backend/.env when run from the repo root.
+	// Excluded from Docker images via .dockerignore, so containers rely purely on real env vars.
+	if loaded := loadDotEnv(".env", "backend/.env"); loaded != "" {
+		log.Printf("[PulsePoll] Loaded environment defaults from %s", loaded)
+	}
+
 	port := getEnv("PORT", "8080")
 	mongoURI := getEnv("MONGO_URI", "mongodb://localhost:27017")
 	mongoDBName := getEnv("MONGO_DB", "pulsepoll")
