@@ -17,8 +17,8 @@ export interface UseOriginTransitionOptions {
 
 export function useOriginTransition(options: UseOriginTransitionOptions = {}) {
   const {
-    durationIn = 0.36,
-    durationOut = 0.24,
+    durationIn = 0.26,
+    durationOut = 0.18,
     easeIn = 'power3.out',
     easeOut = 'power2.in',
   } = options;

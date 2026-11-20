@@ -27,7 +27,13 @@ const MainContent: React.FC = () => {
   const liveMatch = currentPath.match(/^\/poll\/([^/]+)\/live\/?$/);
   if (liveMatch) {
     const pollId = liveMatch[1];
-    return <LiveMonitorView pollId={pollId} onBack={() => navigateTo('/')} />;
+    return (
+      <LiveMonitorView
+        pollId={pollId}
+        onBack={() => navigateTo('/')}
+        onNavigateToPoll={(id) => navigateTo(`/poll/${id}/live`)}
+      />
+    );
   }
 
   // 2. Participant voting route: /vote/:shareSlug or /poll/:shareSlug

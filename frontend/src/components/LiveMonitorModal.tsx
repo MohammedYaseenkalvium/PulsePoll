@@ -37,11 +37,10 @@ export const LiveMonitorModal: React.FC<LiveMonitorModalProps> = ({
 
   const modalRef = useRef<HTMLDivElement>(null);
   const { animateIn, animateOut } = useOriginTransition({
-    durationIn: 0.38,
-    durationOut: 0.26,
+    durationIn: 0.25,
+    durationOut: 0.18,
   });
 
-  // Sync initial state when poll is provided
   useEffect(() => {
     if (poll) {
       const initialCounts: Record<string, number> = {};
@@ -57,14 +56,13 @@ export const LiveMonitorModal: React.FC<LiveMonitorModalProps> = ({
         {
           id: 'init-1',
           time: new Date().toLocaleTimeString(),
-          text: `Initialized real-time monitor for poll "${poll.question}"`,
+          text: `Monitoring "${poll.question}"`,
           type: 'info',
         },
       ]);
     }
   }, [poll]);
 
-  // Handle origin animation
   useEffect(() => {
     if (isOpen && poll) {
       requestAnimationFrame(() => {
@@ -75,7 +73,6 @@ export const LiveMonitorModal: React.FC<LiveMonitorModalProps> = ({
     }
   }, [isOpen, originRect, poll, animateIn]);
 
-  // Connect to SSE stream
   useEffect(() => {
     if (!isOpen || !poll) return;
 
@@ -91,7 +88,7 @@ export const LiveMonitorModal: React.FC<LiveMonitorModalProps> = ({
           {
             id: `conn-${Date.now()}`,
             time: new Date().toLocaleTimeString(),
-            text: 'Connected to Redis Pub/Sub SSE stream',
+            text: 'SSE stream connected',
             type: 'info',
           },
           ...prev.slice(0, 30),
@@ -121,7 +118,7 @@ export const LiveMonitorModal: React.FC<LiveMonitorModalProps> = ({
               {
                 id: `vote-${Date.now()}`,
                 time: new Date().toLocaleTimeString(),
-                text: `Vote update received. Total votes: ${data.totalVotes}`,
+                text: `Vote recorded · Total: ${data.totalVotes}`,
                 type: 'vote',
               },
               ...prev.slice(0, 30),
@@ -139,7 +136,7 @@ export const LiveMonitorModal: React.FC<LiveMonitorModalProps> = ({
               {
                 id: `status-${Date.now()}`,
                 time: new Date().toLocaleTimeString(),
-                text: `Poll status changed to ${data.status.toUpperCase()}`,
+                text: `Status changed to ${data.status}`,
                 type: 'status',
               },
               ...prev.slice(0, 30),
@@ -181,27 +178,31 @@ export const LiveMonitorModal: React.FC<LiveMonitorModalProps> = ({
 
   if (!isOpen || !poll) return null;
 
+  const highestCount = Math.max(0, ...Object.values(optionCounts));
+
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-950/60 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-950/60 backdrop-blur-xs"
       onClick={handleClose}
     >
       <div
         ref={modalRef}
+        role="dialog"
+        aria-modal="true"
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-2xl rounded-3xl bg-surface border border-border-strong shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+        className="w-full max-w-2xl rounded-2xl bg-surface border border-border-strong shadow-xl overflow-hidden flex flex-col max-h-[90vh]"
       >
         {/* Header */}
-        <div className="px-6 py-5 border-b border-border-subtle flex items-center justify-between bg-surface-elevated/40">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-primary-50 dark:bg-primary-950/50 text-primary-600 dark:text-primary-400 flex items-center justify-center shadow-xs">
-              <Radio className="w-5 h-5" />
+        <div className="px-6 py-4 border-b border-border-subtle flex items-center justify-between">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-8 h-8 rounded-lg bg-primary-50 dark:bg-primary-950/50 text-primary-600 dark:text-primary-400 flex items-center justify-center shrink-0">
+              <Radio className="w-4 h-4" aria-hidden="true" />
             </div>
-            <div>
+            <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h2 className="text-base font-bold text-content leading-tight">Live Poll Monitor</h2>
+                <h2 className="text-sm font-semibold text-content leading-tight">Live monitor</h2>
                 <span
-                  className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold capitalize ${
+                  className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium capitalize ${
                     status === 'open'
                       ? 'bg-primary-50 dark:bg-primary-950/40 text-primary-600 dark:text-primary-300'
                       : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400'
@@ -210,92 +211,101 @@ export const LiveMonitorModal: React.FC<LiveMonitorModalProps> = ({
                   {status}
                 </span>
                 <span
-                  className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold ${
+                  className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${
                     isConnected
                       ? 'bg-success-50 dark:bg-success-950/40 text-success-700 dark:text-success-400'
-                      : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400'
+                      : 'bg-warning-50 dark:bg-warning-950/40 text-warning-700 dark:text-warning-300'
                   }`}
                 >
                   <span
                     className={`w-1.5 h-1.5 rounded-full ${
-                      isConnected ? 'bg-success-500 animate-pulse' : 'bg-neutral-400'
+                      isConnected ? 'bg-success-500 animate-pulse' : 'bg-warning-500 animate-pulse'
                     }`}
                   />
-                  <span>{isConnected ? 'SSE Connected' : 'Offline / Polling'}</span>
+                  <span>{isConnected ? 'LIVE' : 'Reconnecting'}</span>
                 </span>
               </div>
-              <p className="text-xs text-content-secondary line-clamp-1">{poll.question}</p>
+              <p className="text-xs text-content-secondary truncate">{poll.question}</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
               onClick={copyShareLink}
-              className="px-3 py-1.5 rounded-xl border border-border-subtle hover:bg-surface text-xs font-semibold text-content flex items-center gap-1.5 transition-colors cursor-pointer"
+              className="px-3 py-1.5 rounded-lg border border-border-subtle hover:bg-surface-elevated text-xs font-medium text-content flex items-center gap-1.5 transition-colors cursor-pointer"
             >
               {copied ? (
                 <>
-                  <CheckCircle2 className="w-3.5 h-3.5 text-success-600" />
+                  <CheckCircle2 className="w-3.5 h-3.5 text-success-600" aria-hidden="true" />
                   <span>Copied</span>
                 </>
               ) : (
                 <>
-                  <Copy className="w-3.5 h-3.5" />
-                  <span>Share link</span>
+                  <Copy className="w-3.5 h-3.5" aria-hidden="true" />
+                  <span>Copy link</span>
                 </>
               )}
             </button>
             <button
               type="button"
               onClick={handleClose}
+              aria-label="Close live monitor"
               className="p-1.5 rounded-lg text-content-secondary hover:text-content hover:bg-surface-elevated transition-colors cursor-pointer"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4" aria-hidden="true" />
             </button>
           </div>
         </div>
 
         {/* Content */}
-        <div className="p-6 sm:p-8 flex-1 overflow-y-auto space-y-6">
+        <div className="p-6 flex-1 overflow-y-auto space-y-5">
           {/* Total Votes KPI Card */}
-          <div className="p-4 rounded-2xl bg-surface-elevated border border-border-subtle flex items-center justify-between">
+          <div className="p-4 rounded-xl bg-surface-elevated border border-border-subtle flex items-center justify-between">
             <div className="space-y-0.5">
-              <span className="text-xs font-semibold text-content-secondary">Total Ingested Votes</span>
-              <p className="text-xs text-content-muted">Atomic Redis HINCRBY counter</p>
+              <span className="text-xs font-medium text-content-secondary">Total votes</span>
+              <p className="text-xs text-content-muted font-mono">/vote/{poll.shareSlug}</p>
             </div>
-            <div className="font-mono text-3xl font-extrabold text-primary-600 dark:text-primary-400 tabular-nums">
-              {totalVotes}
+            <div className="font-mono text-2xl font-semibold text-content tabular-nums">
+              {totalVotes.toLocaleString()}
             </div>
           </div>
 
           {/* Real-Time Option Bars */}
-          <div className="space-y-4">
+          <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <h3 className="text-xs font-bold text-content uppercase tracking-wider">
-                Live Vote Distribution
-              </h3>
-              <span className="text-xs text-content-muted">Zero page refresh</span>
+              <h3 className="text-xs font-semibold text-content">Vote breakdown</h3>
+              <span className="text-xs text-content-muted font-mono">
+                {poll.options.length} options
+              </span>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-2.5">
               {poll.options.map((opt) => {
                 const count = optionCounts[opt.id] ?? opt.voteCount ?? 0;
                 const pct = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
+                const isLead = count > 0 && count === highestCount;
 
                 return (
-                  <div key={opt.id} className="p-3.5 rounded-xl bg-surface border border-border-subtle space-y-2">
+                  <div
+                    key={opt.id}
+                    className="p-3.5 rounded-xl bg-surface border border-border-subtle space-y-2"
+                  >
                     <div className="flex items-center justify-between text-xs">
-                      <span className="font-semibold text-content">{opt.text}</span>
-                      <div className="flex items-center gap-2 font-mono font-bold">
-                        <span className="text-primary-600 dark:text-primary-400">{pct}%</span>
-                        <span className="text-content-muted font-normal">({count} votes)</span>
+                      <span className="font-medium text-content">{opt.text}</span>
+                      <div className="flex items-center gap-2 font-mono tabular-nums">
+                        <span className="font-semibold text-content">{pct}%</span>
+                        <span className="text-content-muted">({count.toLocaleString()})</span>
                       </div>
                     </div>
 
-                    <div className="w-full h-2 rounded-full bg-surface-elevated overflow-hidden border border-border-subtle">
+                    <div className="w-full h-2 rounded-full bg-surface-elevated overflow-hidden">
                       <div
-                        className="h-full bg-primary-600 dark:bg-primary-500 rounded-full transition-all duration-500 ease-out"
+                        className={`h-full rounded-full transition-[width] duration-300 ease-out ${
+                          isLead
+                            ? 'bg-primary-600 dark:bg-primary-500'
+                            : 'bg-neutral-400 dark:bg-neutral-600'
+                        }`}
                         style={{ width: `${pct}%` }}
                       />
                     </div>
@@ -307,21 +317,23 @@ export const LiveMonitorModal: React.FC<LiveMonitorModalProps> = ({
 
           {/* Live Event Stream Log */}
           <div className="space-y-2 pt-2 border-t border-border-subtle">
-            <div className="flex items-center justify-between text-xs font-semibold text-content-secondary">
-              <span>Event Activity Feed</span>
-              <span className="text-[11px] text-content-muted font-mono">Pub/Sub Channel: poll:{poll.id}:updates</span>
+            <div className="flex items-center justify-between text-xs font-medium text-content-secondary">
+              <span>Activity log</span>
+              <span className="text-xs text-content-muted font-mono tabular-nums">
+                {events.length} events
+              </span>
             </div>
 
-            <div className="p-3 rounded-xl bg-surface-elevated font-mono text-[11px] space-y-1.5 max-h-36 overflow-y-auto border border-border-subtle">
+            <div className="p-3 rounded-xl bg-surface-elevated font-mono text-xs space-y-1.5 max-h-36 overflow-y-auto border border-border-subtle">
               {events.map((ev) => (
                 <div key={ev.id} className="flex items-start gap-2 text-content-secondary">
-                  <span className="text-content-muted shrink-0">[{ev.time}]</span>
+                  <span className="text-content-muted tabular-nums shrink-0">{ev.time}</span>
                   <span
                     className={
                       ev.type === 'vote'
-                        ? 'text-primary-600 dark:text-primary-400 font-semibold'
+                        ? 'text-primary-600 dark:text-primary-400 font-medium'
                         : ev.type === 'status'
-                        ? 'text-warning-600 dark:text-warning-400 font-semibold'
+                        ? 'text-warning-600 dark:text-warning-400 font-medium'
                         : 'text-content'
                     }
                   >
@@ -334,14 +346,13 @@ export const LiveMonitorModal: React.FC<LiveMonitorModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-border-subtle bg-surface-elevated/40 flex items-center justify-between text-xs text-content-secondary">
-          <span>PulsePoll Real-Time Ingestion</span>
+        <div className="px-6 py-3.5 border-t border-border-subtle bg-surface-elevated/40 flex items-center justify-end">
           <button
             type="button"
             onClick={handleClose}
-            className="px-4 py-2 rounded-xl border border-border-subtle hover:bg-surface text-content font-semibold transition-colors cursor-pointer"
+            className="px-4 py-1.5 rounded-lg border border-border-subtle hover:bg-surface text-xs text-content font-medium transition-colors cursor-pointer"
           >
-            Close Monitor
+            Close
           </button>
         </div>
       </div>
