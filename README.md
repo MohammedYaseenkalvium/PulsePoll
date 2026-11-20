@@ -98,16 +98,35 @@ PulsePoll/
 | `PORT` | `8080` | Port for the Go Gin HTTP and SSE server |
 | `MONGO_URI` | `mongodb://localhost:27017` | MongoDB connection URI |
 | `MONGO_DB` | `pulsepoll` | Target MongoDB database name |
+| `REDIS_URL` | `""` | Optional full URL; takes precedence. `rediss://` enables TLS (Upstash, Redis Cloud) |
 | `REDIS_ADDR` | `localhost:6379` | Redis host and port |
+| `REDIS_USERNAME` | `""` | Redis ACL username (managed providers typically use `default`) |
 | `REDIS_PASSWORD` | `""` | Redis authentication password |
 | `REDIS_DB` | `0` | Redis logical database index |
-| `JWT_SECRET` | `pulsepoll-secret-key-change-in-production-2026` | Secret key for signing JWT tokens |
+| `REDIS_TLS` | `false` | Force TLS when using `REDIS_ADDR` |
+| `JWT_SECRET` | `pulsepoll-secret-key-change-in-production-2026` | Secret key for signing JWT tokens (**always override in production**) |
 | `JWT_EXPIRY_HOURS` | `72` | Token validity duration in hours |
 | `CORS_ALLOW_ORIGIN` | `*` | Allowed CORS origin (e.g. `http://localhost:5173`) |
+| `STATIC_DIR` | auto | Built SPA location. Auto-detects `./frontend/dist`, `../frontend/dist`, `./dist` |
+
+A fully documented template lives in [`backend/.env.example`](backend/.env.example).
 
 ---
 
-## 5. Quickstart Guide
+## 5. Run Everything with Docker (Production Image)
+
+The root `Dockerfile` is a multi-stage build (Node 20 → Go 1.27 → Alpine) producing a single image where Go serves both the API and the React SPA on port `8080`.
+
+```bash
+JWT_SECRET="$(openssl rand -base64 48)" docker compose up --build -d
+```
+Open `http://localhost:8080`. Compose starts `mongodb`, `redis`, and `app` and waits for the database health checks before booting the app.
+
+For a cloud host (Render, Railway, Fly.io, etc.), build the same `Dockerfile` and set `MONGO_URI` (e.g. Atlas), `REDIS_URL` (e.g. `rediss://default:<pw>@<host>.upstash.io:6379`), `JWT_SECRET`, and `CORS_ALLOW_ORIGIN`.
+
+---
+
+## 6. Local Development Quickstart
 
 ### 1. Start Infrastructure Containers (MongoDB + Redis)
 ```bash
@@ -139,7 +158,7 @@ Open `http://localhost:5173` in your browser.
 
 ---
 
-## 6. Verification & Production Build
+## 7. Verification & Production Build
 
 ### Frontend Production Build
 ```bash
@@ -157,7 +176,7 @@ go vet ./...
 
 ---
 
-## 7. API Reference
+## 8. API Reference
 
 ### Authentication
 - `POST /api/auth/register` — Register a creator (`email`, `username`, `password`)
